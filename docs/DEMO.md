@@ -5,7 +5,7 @@
 ## 0. 准备（30 秒）
 
 ```bash
-git clone https://github.com/<your-name>/ops-ai-assistant.git
+git clone https://github.com/kkker-yeran/ops-ai-assistant.git
 cd ops-ai-assistant
 pip install -r requirements.txt
 uvicorn api.main:app --port 8000

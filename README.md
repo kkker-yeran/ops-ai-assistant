@@ -136,7 +136,7 @@ flowchart TB
 ### 方式一：Docker Compose（推荐）
 
 ```bash
-git clone https://github.com/<your-name>/ops-ai-assistant.git
+git clone https://github.com/kkker-yeran/ops-ai-assistant.git
 cd ops-ai-assistant
 
 cp .env.example .env        # 填入模型 API Key / Dify 地址
@@ -298,7 +298,7 @@ Agent 侧看到的工具（节选，`agent/function_schema.json` 为完整版）
 **程刚** · 2026 届计算机科学与技术本科 · 方向：大模型应用 / 交付与售前
 
 - 邮箱：1848479037@qq.com
-- 作品集：<https://<your-name>.github.io/portfolio>
+- 作品集：<https://kkker-yeran.github.io/portfolio>
 
 ---
 
