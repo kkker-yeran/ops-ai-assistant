@@ -1,0 +1,88 @@
+{
+  "tools": [
+    {
+      "name": "collect_metric",
+      "description": "采集目标主机的指定运行时指标，返回结构化 JSON。仅当用户问题涉及服务器性能指标时使用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "目标主机 IP 或主机名"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "cpu_usage", "load_avg", "cpu_top",
+              "mem_usage", "mem_top", "swap_usage", "oom_events",
+              "disk_usage", "disk_inode", "disk_io", "big_dirs",
+              "net_conn", "net_bandwidth", "net_listen",
+              "uptime_info", "zombie_proc", "sys_errors", "service_alive"
+            ],
+            "description": "指标名称，见 /api/v1/metrics/catalog"
+          },
+          "window": {
+            "type": "string",
+            "description": "时间窗口，如 5m / 1h / 24h",
+            "default": "5m"
+          }
+        },
+        "required": ["host", "metric"]
+      }
+    },
+    {
+      "name": "search_knowledge",
+      "description": "检索 Linux 运维知识库，返回相关的命令手册条目与历史故障案例。用于补充排查思路与标准处置流程。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "检索语句，建议使用「现象 + 资源」的写法，如：CPU 飙高 排查"
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "返回条数",
+            "default": 5
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "find_similar_incident",
+      "description": "在历史故障库中查找相似故障及其处理方案。命中后可直接复用历史结论，避免重复推理。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "symptom": {
+            "type": "string",
+            "description": "故障现象描述"
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "返回条数",
+            "default": 3
+          }
+        },
+        "required": ["symptom"]
+      }
+    },
+    {
+      "name": "save_incident",
+      "description": "把本次故障的现象、根因与处置方案写入历史故障库，形成经验沉淀。仅在用户确认结论有效后调用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "symptom": { "type": "string" },
+          "root_cause": { "type": "string" },
+          "solution": { "type": "string" },
+          "host_role": { "type": "string", "description": "主机角色，如 web / db / cache / app" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "key_metrics": { "type": "object", "description": "关键指标键值对，用于生成指纹" }
+        },
+        "required": ["symptom", "root_cause", "solution"]
+      }
+    }
+  ]
+}

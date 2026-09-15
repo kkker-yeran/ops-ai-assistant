@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: ops-ai-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      COLLECT_ALLOWED_HOSTS: "localhost,127.0.0.1"
+    volumes:
+      - ./data:/app/data
+      - ./collector:/app/collector
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ops-ai-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis-data:

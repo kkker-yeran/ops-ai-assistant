@@ -1,0 +1,202 @@
+# Dify Workflow DSL —— 智能运维故障分析助手
+# 导入方式：Dify 控制台 → 工作室 → 导入 DSL → 选择本文件
+# 导入后需配置：1) 模型供应商凭据 2) 自定义工具的 API 地址（指向 FastAPI 服务）
+# 版本：v1.0
+
+version: "1.0"
+kind: app
+app:
+  name: 智能运维故障分析助手
+  mode: advanced-chat
+  icon: "\U0001F6E0"
+  description: >
+    四阶段推理链（意图理解 → 知识检索 → 指标分析 → 方案生成），
+    自动完成 Linux 服务器故障的根因定位与处置建议生成。
+
+model_config:
+  provider: openai
+  model: gpt-4o-mini
+  completion_params:
+    temperature: 0.2
+    max_tokens: 2048
+
+# ------------------------------------------------------------------ #
+# 工作流图
+# ------------------------------------------------------------------ #
+workflow:
+  nodes:
+    - id: start
+      type: start
+      variables:
+        - name: query
+          type: paragraph
+          required: true
+          label: 故障描述
+
+    # ① 意图理解
+    - id: intent_parser
+      type: llm
+      title: "① 意图理解"
+      model:
+        provider: openai
+        model: gpt-4o-mini
+        completion_params:
+          temperature: 0
+      prompt_template:
+        file: prompts/01_intent.md
+      variables:
+        - value_selector: [sys, query]
+          variable: query
+      output_parser:
+        type: json
+        strict: true
+        fallback:
+          fault_type: unknown
+          hosts: []
+          time_window: 5m
+          urgency: P2
+          user_intent: diagnose
+
+    # ② 知识检索（调用 FastAPI /api/v1/rag/search）
+    - id: rag_retriever
+      type: http-request
+      title: "② 知识检索"
+      method: post
+      url: "{{env.API_BASE_URL}}/api/v1/rag/search"
+      headers:
+        Content-Type: application/json
+      body:
+        type: json
+        data:
+          query: "{{#start.query#}}"
+          top_k: 5
+      output_mapper:
+        - source: data
+          target: rag_hits
+
+    # ② 附加：历史相似故障
+    - id: incident_matcher
+      type: http-request
+      title: "② 历史相似故障"
+      method: post
+      url: "{{env.API_BASE_URL}}/api/v1/incidents/similar"
+      body:
+        type: json
+        data:
+          symptom: "{{#start.query#}}"
+          top_k: 3
+      output_mapper:
+        - source: data
+          target: similar_incidents
+
+    # ③ 指标采集（Function Calling，由 LLM 动态决定采集哪些指标）
+    - id: metric_collector
+      type: llm
+      title: "③ 指标采集决策"
+      model:
+        provider: openai
+        model: gpt-4o-mini
+        completion_params:
+          temperature: 0
+      prompt_template:
+        inline: |
+          根据故障工单，决定需要采集哪些指标。
+          可选：cpu_usage / load_avg / cpu_top / mem_usage / mem_top / swap_usage /
+                oom_events / disk_usage / disk_inode / disk_io / big_dirs /
+                net_conn / net_bandwidth / net_listen / uptime_info /
+                zombie_proc / sys_errors / service_alive
+          只输出 JSON 数组，例如：["cpu_usage","load_avg","cpu_top"]
+          故障工单：{{#intent_parser.text#}}
+      tools:
+        - name: collect_metric
+          schema_file: function_schema.json
+      output_parser:
+        type: json_array
+
+    - id: metric_fetch
+      type: http-request
+      title: "③ 采集执行"
+      method: post
+      url: "{{env.API_BASE_URL}}/api/v1/metrics/collect"
+      body:
+        type: json
+        data:
+          host: "{{#intent_parser.hosts[0]#}}"
+          metrics: "{{#metric_collector.text#}}"
+          window: "{{#intent_parser.time_window#}}"
+      output_mapper:
+        - source: data
+          target: metrics
+
+    # ③ 指标分析
+    - id: metric_analyzer
+      type: llm
+      title: "③ 指标分析"
+      model:
+        provider: openai
+        model: gpt-4o-mini
+        completion_params:
+          temperature: 0.1
+      prompt_template:
+        file: prompts/03_analyze.md
+      variables:
+        - value_selector: [intent_parser, text]
+          variable: intent
+        - value_selector: [metric_fetch, metrics]
+          variable: metrics
+        - value_selector: [rag_retriever, rag_hits]
+          variable: rag_hits
+
+    # ④ 方案生成
+    - id: solution_generator
+      type: llm
+      title: "④ 方案生成"
+      model:
+        provider: openai
+        model: gpt-4o
+        completion_params:
+          temperature: 0.2
+          max_tokens: 2048
+      prompt_template:
+        file: prompts/04_solution.md
+      variables:
+        - value_selector: [sys, query]
+          variable: query
+        - value_selector: [intent_parser, text]
+          variable: intent
+        - value_selector: [metric_analyzer, text]
+          variable: analysis
+        - value_selector: [incident_matcher, similar_incidents]
+          variable: similar_incidents
+
+    - id: answer
+      type: answer
+      title: 诊断报告
+      answer: "{{#solution_generator.text#}}"
+
+  edges:
+    - source: start
+      target: intent_parser
+    - source: intent_parser
+      target: rag_retriever
+    - source: intent_parser
+      target: incident_matcher
+    - source: intent_parser
+      target: metric_collector
+    - source: metric_collector
+      target: metric_fetch
+    - source: metric_fetch
+      target: metric_analyzer
+    - source: rag_retriever
+      target: metric_analyzer
+    - source: metric_analyzer
+      target: solution_generator
+    - source: incident_matcher
+      target: solution_generator
+    - source: solution_generator
+      target: answer
+
+environment_variables:
+  - name: API_BASE_URL
+    value: "http://ops-ai-api:8000"
+    description: FastAPI 采集服务地址（Docker 内用服务名，本地用 http://host.docker.internal:8000）
