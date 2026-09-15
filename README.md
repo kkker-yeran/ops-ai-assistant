@@ -295,7 +295,6 @@ Agent 侧看到的工具（节选，`agent/function_schema.json` 为完整版）
 
 ## 十、作者
 
-**程刚** · 2026 届计算机科学与技术本科 · 方向：大模型应用 / 交付与售前
 
 - 邮箱：1848479037@qq.com
 - 作品集：<https://kkker-yeran.github.io/portfolio>
@@ -304,4 +303,4 @@ Agent 侧看到的工具（节选，`agent/function_schema.json` 为完整版）
 
 ## License
 
-[MIT](./LICENSE) © 2026 程刚
+[MIT](./LICENSE) © 2026 
